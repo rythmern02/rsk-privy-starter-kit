@@ -12,7 +12,13 @@ export default defineConfig({
     hmr: {
       clientPort: 443,
       host: '0.0.0.0'
-    }
+    },
+    watch: {
+      usePolling: true
+    },
+    cors: true,
+    strictPort: true,
+    allowedHosts: 'all'
   },
   resolve: {
     alias: {
