@@ -8,14 +8,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    port: 5000,
     hmr: {
       clientPort: 443,
-      host: "0.0.0.0"
-    },
-    headers: {
-      'Access-Control-Allow-Origin': '*'
-    },
-    allowedHosts: 'all'
+      host: '0.0.0.0'
+    }
   },
   resolve: {
     alias: {
