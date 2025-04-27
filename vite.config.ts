@@ -11,7 +11,11 @@ export default defineConfig({
     hmr: {
       clientPort: 443,
       host: "0.0.0.0"
-    }
+    },
+    headers: {
+      'Access-Control-Allow-Origin': '*'
+    },
+    allowedHosts: 'all'
   },
   resolve: {
     alias: {
