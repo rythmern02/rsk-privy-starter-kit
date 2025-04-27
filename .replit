@@ -14,3 +14,19 @@ externalPort = 5000
 [[ports]]
 localPort = 5173
 externalPort = 5173
+
+[workflows]
+runButton = "Run"
+
+[[workflows.workflow]]
+name = "Run"
+author = 37090360
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "yarn install --network-timeout 600000"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "yarn dev"
