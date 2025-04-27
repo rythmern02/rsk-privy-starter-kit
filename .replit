@@ -8,5 +8,9 @@ channel = "stable-24_05"
 run = ["sh", "-c", "yarn dev"]
 
 [[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
 localPort = 5173
 externalPort = 5173
