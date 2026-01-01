@@ -33,7 +33,7 @@ const privyConfig: PrivyClientConfig = {
   supportedChains: [rootstock, rootstockTestnet],
 };
 
-const appId = import.meta.env.VITE_PRIVY_APP_ID ;
+const appId = import.meta.env.VITE_PRIVY_APP_ID || "cmjvz6xmy00pelb0c24nl8zqw";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   
