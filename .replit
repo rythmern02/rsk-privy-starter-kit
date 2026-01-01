@@ -9,18 +9,17 @@ run = ["sh", "-c", "yarn dev"]
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 5173
-externalPort = 5173
+externalPort = 80
 
 [workflows]
-runButton = "Run"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Run"
-author = 37090360
 mode = "sequential"
 
 [[workflows.workflow.tasks]]
@@ -30,3 +29,27 @@ args = "yarn install --network-timeout 600000"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "yarn dev"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Frontend Server"
+
+[[workflows.workflow]]
+name = "Frontend Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev -- --host 0.0.0.0 --port 5000"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[agent]
+expertMode = true
