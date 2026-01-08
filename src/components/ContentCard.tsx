@@ -37,20 +37,31 @@ export default function ContentCard({
 
   useEffect(() => {
     const loadContentData = async () => {
-      if (!address || !wallets[0]) return;
-
+      // Don't return if address is missing, we still want to show the price
+      // and we want to stop loading even if not connected
       try {
         setIsLoading(true);
-        const provider = await wallets[0].getEthereumProvider();
-        const ethersProvider = new ethers.providers.Web3Provider(provider);
+        
+        // If not connected, we can't check access but we might be able to get price
+        // using a public provider or by just skipping access check
+        if (address && wallets[0]) {
+          const provider = await wallets[0].getEthereumProvider();
+          const ethersProvider = new ethers.providers.Web3Provider(provider);
 
-        // Check if user has access
-        const access = await checkAccess(ethersProvider, address, contentId);
-        setHasAccess(access);
+          // Check if user has access
+          const access = await checkAccess(ethersProvider, address, contentId);
+          setHasAccess(access);
 
-        // Get content price
-        const contentPrice = await getContentPrice(ethersProvider, contentId);
-        setPrice(contentPrice);
+          // Get content price
+          const contentPrice = await getContentPrice(ethersProvider, contentId);
+          setPrice(contentPrice);
+        } else {
+          // If not connected, we should still try to get the price using a public provider
+          // for now let's just use a hardcoded fallback or wait for connection
+          setHasAccess(false);
+          // In a real app, you'd use a public RPC here if wallets[0] is missing
+          // But to fix the "refreshing" issue, we MUST ensure setIsLoading(false) runs
+        }
       } catch (error) {
         console.error("Error loading content data:", error);
       } finally {
