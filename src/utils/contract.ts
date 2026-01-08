@@ -71,23 +71,16 @@ export const unlockContent = async (
   try {
     const contract = getContract(signer);
 
-    // Estimate gas
-    const gasEstimate = await contract.estimateGas.unlockContent(contentId, {
-      value: price,
-    });
-
-    // Add 20% buffer to gas estimate
-    const gasLimit = gasEstimate.mul(120).div(100);
-
     console.log("Unlocking content:", {
       contentId,
       price: ethers.utils.formatEther(price),
-      gasLimit: gasLimit.toString(),
     });
 
     // Send transaction - let Privy/Wallet handle gas estimation
+    // On Rootstock, we sometimes need to explicitly set gasLimit if estimation fails
     const tx = await contract.unlockContent(contentId, {
       value: price,
+      gasLimit: 500000, // Provide a generous gas limit to avoid estimation issues
     });
 
     console.log("Transaction sent:", tx.hash);
@@ -102,19 +95,24 @@ export const unlockContent = async (
     console.error("Error unlocking content:", error);
 
     let errorMessage = "Failed to unlock content";
+    
+    // Safely check error properties
+    const errObj = error || {};
+    const errCode = errObj.code;
+    const errMessage = errObj.message || "";
 
-    if (error.code === "INSUFFICIENT_FUNDS") {
+    if (errCode === "INSUFFICIENT_FUNDS") {
       errorMessage = "Insufficient funds to complete transaction";
-    } else if (error.code === "ACTION_REJECTED" || error.code === 4001) {
+    } else if (errCode === "ACTION_REJECTED" || errCode === 4001) {
       errorMessage = "Transaction rejected by user";
-    } else if (error.message?.includes("already unlocked")) {
+    } else if (errMessage.includes?.("already unlocked")) {
       errorMessage = "You already have access to this content";
-    } else if (error.message?.includes("Incorrect payment")) {
+    } else if (errMessage.includes?.("Incorrect payment")) {
       errorMessage = "Incorrect payment amount";
-    } else if (error.message?.includes("Content does not exist")) {
+    } else if (errMessage.includes?.("Content does not exist")) {
       errorMessage = "Content does not exist or price not set";
-    } else if (error.reason) {
-      errorMessage = error.reason;
+    } else if (errObj.reason) {
+      errorMessage = errObj.reason;
     }
 
     return { success: false, error: errorMessage };
