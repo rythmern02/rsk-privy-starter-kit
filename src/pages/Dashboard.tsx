@@ -7,7 +7,7 @@ import ContentCard from "../components/ContentCard";
 // Sample content data - in production, fetch from your backend/API
 const CONTENT_ITEMS = [
   {
-    contentId: "premium-article-1",
+    contentId: "0",
     title: "Bitcoin Security Deep Dive",
     description:
       "Learn how Bitcoin's merged mining secures Rootstock and why it matters for your dApps",
@@ -26,7 +26,7 @@ For developers, this means you can build with confidence knowing your smart cont
       "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=800&q=80",
   },
   {
-    contentId: "video-course-1",
+    contentId: "1",
     title: "Building DeFi on Rootstock",
     description:
       "Complete video course on creating decentralized finance applications with Bitcoin security",
@@ -65,7 +65,7 @@ Includes: Source code, exercises, and project templates`,
       "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
   },
   {
-    contentId: "exclusive-report-1",
+    contentId: "2",
     title: "2025 Blockchain Industry Report",
     description:
       "Exclusive analysis of blockchain trends, market data, and investment opportunities",

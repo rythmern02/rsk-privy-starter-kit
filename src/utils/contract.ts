@@ -85,11 +85,9 @@ export const unlockContent = async (
       gasLimit: gasLimit.toString(),
     });
 
-    // Send transaction
+    // Send transaction - let Privy/Wallet handle gas estimation
     const tx = await contract.unlockContent(contentId, {
       value: price,
-      // On Rootstock, it's often better to let the wallet handle gas or provide a generous limit
-      gasLimit: 300000, 
     });
 
     console.log("Transaction sent:", tx.hash);
