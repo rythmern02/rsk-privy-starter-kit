@@ -18,7 +18,7 @@ export const rsktestnet = defineChain({
   },
   contracts: {
     multicall3: {
-      address: "0xca11bde05977b3631167028862be2a173976ca11",
+      address: "0xC8d4943aeB1BcDAb09007A9b91af5a3Fe8f22a24",
       blockCreated: 2771150,
     },
   },
