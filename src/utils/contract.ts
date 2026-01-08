@@ -88,7 +88,8 @@ export const unlockContent = async (
     // Send transaction
     const tx = await contract.unlockContent(contentId, {
       value: price,
-      gasLimit: gasLimit,
+      // On Rootstock, it's often better to let the wallet handle gas or provide a generous limit
+      gasLimit: 300000, 
     });
 
     console.log("Transaction sent:", tx.hash);
