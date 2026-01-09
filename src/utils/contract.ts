@@ -18,11 +18,17 @@ export const ROOTSTOCK_TESTNET = {
 /**
  * Get contract instance with provider or signer
  */
-export const getContract = (signerOrProvider: ethers.Signer | ethers.providers.Provider) => {
+export const getContract = (
+  signerOrProvider: ethers.Signer | ethers.providers.Provider,
+) => {
   if (!CONTENT_PAYWALL_ADDRESS) {
     throw new Error("Contract address not configured in constants");
   }
-  return new ethers.Contract(CONTENT_PAYWALL_ADDRESS, CONTRACT_ABI, signerOrProvider);
+  return new ethers.Contract(
+    CONTENT_PAYWALL_ADDRESS,
+    CONTRACT_ABI,
+    signerOrProvider,
+  );
 };
 
 /**
@@ -31,7 +37,7 @@ export const getContract = (signerOrProvider: ethers.Signer | ethers.providers.P
 export const checkAccess = async (
   provider: ethers.providers.Provider,
   userAddress: string,
-  contentId: string
+  contentId: string,
 ): Promise<boolean> => {
   try {
     const contract = getContract(provider);
@@ -48,7 +54,7 @@ export const checkAccess = async (
  */
 export const getContentPrice = async (
   provider: ethers.providers.Provider,
-  contentId: string
+  contentId: string,
 ): Promise<ethers.BigNumber> => {
   try {
     const contract = getContract(provider);
@@ -66,7 +72,7 @@ export const getContentPrice = async (
 export const unlockContent = async (
   signer: ethers.Signer,
   contentId: string,
-  price: ethers.BigNumber
+  price: ethers.BigNumber,
 ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
   try {
     const contract = getContract(signer);
@@ -76,46 +82,47 @@ export const unlockContent = async (
       price: ethers.utils.formatEther(price),
     });
 
-    // Send transaction - let Privy/Wallet handle gas estimation
-    // On Rootstock, we sometimes need to explicitly set gasLimit if estimation fails
+    // 1. Force a high gas limit to bypass the "Estimation Failed" error
     const tx = await contract.unlockContent(contentId, {
       value: price,
-      gasLimit: 500000, // Provide a generous gas limit to avoid estimation issues
+      gasLimit: 2500000, // Hardcoded high limit
     });
 
     console.log("Transaction sent:", tx.hash);
-
-    // Wait for confirmation
     const receipt = await tx.wait();
-
     console.log("Transaction confirmed:", receipt.transactionHash);
 
     return { success: true, receipt };
   } catch (error: any) {
     console.error("Error unlocking content:", error);
 
-    let errorMessage = "Failed to unlock content";
-    
-    // Safely check error properties
-    const errObj = error || {};
-    const errCode = errObj.code;
-    const errMessage = errObj.message || "";
+    // --- SAFETY FIX START ---
+    // Convert the error to a string safely. This PREVENTS the "includes of undefined" crash.
+    const errString = String(
+      error?.data?.message || error?.message || error,
+    ).toLowerCase();
 
-    if (errCode === "INSUFFICIENT_FUNDS") {
-      errorMessage = "Insufficient funds to complete transaction";
-    } else if (errCode === "ACTION_REJECTED" || errCode === 4001) {
-      errorMessage = "Transaction rejected by user";
-    } else if (errMessage.includes?.("already unlocked")) {
-      errorMessage = "You already have access to this content";
-    } else if (errMessage.includes?.("Incorrect payment")) {
-      errorMessage = "Incorrect payment amount";
-    } else if (errMessage.includes?.("Content does not exist")) {
-      errorMessage = "Content does not exist or price not set";
-    } else if (errObj.reason) {
-      errorMessage = errObj.reason;
+    let finalError = "Failed to unlock content";
+
+    if (errString.includes("insufficient funds")) {
+      finalError = "Insufficient funds";
+    } else if (
+      errString.includes("user rejected") ||
+      errString.includes("action_rejected")
+    ) {
+      finalError = "Transaction rejected by user";
+    } else if (
+      errString.includes("content does not exist") ||
+      errString.includes("price not set")
+    ) {
+      finalError = "Content ID not found or Price is 0";
+    } else {
+      // If no specific message, show the raw error (truncated to avoid huge logs)
+      finalError = errString.slice(0, 100);
     }
+    // --- SAFETY FIX END ---
 
-    return { success: false, error: errorMessage };
+    return { success: false, error: finalError };
   }
 };
 
@@ -130,7 +137,7 @@ export const listenForUnlockEvents = (
     contentId: string;
     price: string;
     timestamp: number;
-  }) => void
+  }) => void,
 ) => {
   try {
     const contract = getContract(provider);
@@ -141,21 +148,29 @@ export const listenForUnlockEvents = (
     console.log("Setting up event listener for user:", userAddress);
 
     // Listen for events
-    contract.on(filter, (user: string, contentId: string, price: ethers.BigNumber, timestamp: ethers.BigNumber) => {
-      console.log("ContentUnlocked event received:", {
-        user,
-        contentId,
-        price: price.toString(),
-        timestamp: timestamp.toNumber(),
-      });
+    contract.on(
+      filter,
+      (
+        user: string,
+        contentId: string,
+        price: ethers.BigNumber,
+        timestamp: ethers.BigNumber,
+      ) => {
+        console.log("ContentUnlocked event received:", {
+          user,
+          contentId,
+          price: price.toString(),
+          timestamp: timestamp.toNumber(),
+        });
 
-      callback({
-        user,
-        contentId,
-        price: price.toString(),
-        timestamp: timestamp.toNumber(),
-      });
-    });
+        callback({
+          user,
+          contentId,
+          price: price.toString(),
+          timestamp: timestamp.toNumber(),
+        });
+      },
+    );
 
     // Return cleanup function
     return () => {
@@ -178,7 +193,7 @@ export const listenForAllUnlockEvents = (
     contentId: string;
     price: string;
     timestamp: number;
-  }) => void
+  }) => void,
 ) => {
   try {
     const contract = getContract(provider);
@@ -189,21 +204,29 @@ export const listenForAllUnlockEvents = (
     console.log("Setting up global event listener");
 
     // Listen for events
-    contract.on(filter, (user: string, contentId: string, price: ethers.BigNumber, timestamp: ethers.BigNumber) => {
-      console.log("ContentUnlocked event received:", {
-        user,
-        contentId,
-        price: price.toString(),
-        timestamp: timestamp.toNumber(),
-      });
+    contract.on(
+      filter,
+      (
+        user: string,
+        contentId: string,
+        price: ethers.BigNumber,
+        timestamp: ethers.BigNumber,
+      ) => {
+        console.log("ContentUnlocked event received:", {
+          user,
+          contentId,
+          price: price.toString(),
+          timestamp: timestamp.toNumber(),
+        });
 
-      callback({
-        user,
-        contentId,
-        price: price.toString(),
-        timestamp: timestamp.toNumber(),
-      });
-    });
+        callback({
+          user,
+          contentId,
+          price: price.toString(),
+          timestamp: timestamp.toNumber(),
+        });
+      },
+    );
 
     // Return cleanup function
     return () => {
@@ -220,7 +243,7 @@ export const listenForAllUnlockEvents = (
  * Get contract statistics
  */
 export const getContractStats = async (
-  provider: ethers.providers.Provider
+  provider: ethers.providers.Provider,
 ): Promise<{
   totalBalance: ethers.BigNumber;
   totalUnlocks: number;
@@ -252,20 +275,23 @@ export const getContractStats = async (
 export const checkMultipleAccess = async (
   provider: ethers.providers.Provider,
   userAddress: string,
-  contentIds: string[]
+  contentIds: string[],
 ): Promise<boolean[]> => {
   try {
     const contract = getContract(provider);
 
     // Check if contract has batch function
     if (contract.checkMultipleAccess) {
-      const accessList = await contract.checkMultipleAccess(userAddress, contentIds);
+      const accessList = await contract.checkMultipleAccess(
+        userAddress,
+        contentIds,
+      );
       return accessList;
     }
 
     // Fallback to individual checks
     const accessChecks = await Promise.all(
-      contentIds.map((id) => contract.hasAccess(userAddress, id))
+      contentIds.map((id) => contract.hasAccess(userAddress, id)),
     );
 
     return accessChecks;
@@ -280,13 +306,13 @@ export const checkMultipleAccess = async (
  */
 export const getMultipleContentPrices = async (
   provider: ethers.providers.Provider,
-  contentIds: string[]
-): Promise<ethers.BigNumber[]> => {                   
+  contentIds: string[],
+): Promise<ethers.BigNumber[]> => {
   try {
     const contract = getContract(provider);
 
     const prices = await Promise.all(
-      contentIds.map((id) => contract.contentPrices(id))
+      contentIds.map((id) => contract.contentPrices(id)),
     );
 
     return prices;
@@ -302,7 +328,7 @@ export const getMultipleContentPrices = async (
 export const getContentInfo = async (
   provider: ethers.providers.Provider,
   userAddress: string,
-  contentId: string
+  contentId: string,
 ): Promise<{
   price: ethers.BigNumber;
   hasAccess: boolean;
@@ -334,7 +360,10 @@ export const getContentInfo = async (
 /**
  * Format rBTC amount for display
  */
-export const formatRBTC = (amount: ethers.BigNumber, decimals: number = 4): string => {
+export const formatRBTC = (
+  amount: ethers.BigNumber,
+  decimals: number = 4,
+): string => {
   return parseFloat(ethers.utils.formatEther(amount)).toFixed(decimals);
 };
 
@@ -396,14 +425,16 @@ export const isValidAddress = (address: string): boolean => {
 export const getUserUnlockHistory = async (
   provider: ethers.providers.Provider,
   userAddress: string,
-  fromBlock: number = 0
-): Promise<Array<{
-  contentId: string;
-  price: string;
-  timestamp: number;
-  transactionHash: string;
-  blockNumber: number;
-}>> => {
+  fromBlock: number = 0,
+): Promise<
+  Array<{
+    contentId: string;
+    price: string;
+    timestamp: number;
+    transactionHash: string;
+    blockNumber: number;
+  }>
+> => {
   try {
     const contract = getContract(provider);
 
@@ -432,14 +463,16 @@ export const getUserUnlockHistory = async (
  */
 export const getRecentUnlocks = async (
   provider: ethers.providers.Provider,
-  limit: number = 10
-): Promise<Array<{
-  user: string;
-  contentId: string;
-  price: string;
-  timestamp: number;
-  transactionHash: string;
-}>> => {
+  limit: number = 10,
+): Promise<
+  Array<{
+    user: string;
+    contentId: string;
+    price: string;
+    timestamp: number;
+    transactionHash: string;
+  }>
+> => {
   try {
     const contract = getContract(provider);
 
@@ -479,7 +512,7 @@ export const estimateUnlockGas = async (
   provider: ethers.providers.Provider,
   signer: ethers.Signer,
   contentId: string,
-  price: ethers.BigNumber
+  price: ethers.BigNumber,
 ): Promise<{
   gasLimit: ethers.BigNumber;
   gasCost: ethers.BigNumber;
@@ -521,7 +554,7 @@ export const estimateUnlockGas = async (
 export const checkSufficientBalance = async (
   provider: ethers.providers.Provider,
   userAddress: string,
-  requiredAmount: ethers.BigNumber
+  requiredAmount: ethers.BigNumber,
 ): Promise<boolean> => {
   try {
     const balance = await provider.getBalance(userAddress);
