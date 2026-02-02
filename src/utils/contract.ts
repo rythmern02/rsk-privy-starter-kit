@@ -67,7 +67,8 @@ export const getContentPrice = async (
 };
 
 /**
- * Unlock content by paying
+ * Unlock content by paying with dynamic gas estimation.
+ * Uses legacy tx (type 0 + gasPrice) for Rootstock/RSK compatibility.
  */
 export const unlockContent = async (
   signer: ethers.Signer,
@@ -76,56 +77,72 @@ export const unlockContent = async (
 ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
   try {
     const contract = getContract(signer);
+    const provider = signer.provider;
+    if (!provider) {
+      return { success: false, error: "No provider available for signer" };
+    }
 
-    console.log("Unlocking content:", {
-      contentId,
-      price: ethers.utils.formatEther(price),
-    });
+    let gasLimit;
+    try {
+      const estimatedGas = await contract.estimateGas.unlockContent(contentId, {
+        value: price,
+      });
+      gasLimit = estimatedGas.mul(120).div(100);
+    } catch (estError) {
+      console.warn("Gas estimation failed, falling back to safe default", estError);
+      gasLimit = ethers.BigNumber.from(500000);
+    }
 
-    // 1. Force a high gas limit to bypass the "Estimation Failed" error
-    const tx = await contract.unlockContent(contentId, {
+    // Rootstock/RSK uses legacy gas model (gasPrice), not EIP-1559. Force legacy tx.
+    const gasPrice = await provider.getGasPrice();
+    const gasPriceWithBuffer = gasPrice.mul(110).div(100);
+
+    const txOverrides: {
+      value: ethers.BigNumber;
+      gasLimit: ethers.BigNumber;
+      type: number;
+      gasPrice: ethers.BigNumber;
+    } = {
       value: price,
-      gasLimit: 2500000, // Hardcoded high limit
-    });
+      gasLimit,
+      type: 0,
+      gasPrice: gasPriceWithBuffer,
+    };
 
-    console.log("Transaction sent:", tx.hash);
+    const tx = await contract.unlockContent(contentId, txOverrides);
     const receipt = await tx.wait();
-    console.log("Transaction confirmed:", receipt.transactionHash);
 
     return { success: true, receipt };
   } catch (error: any) {
     console.error("Error unlocking content:", error);
 
-    // --- SAFETY FIX START ---
-    // Convert the error to a string safely. This PREVENTS the "includes of undefined" crash.
     const errString = String(
       error?.data?.message || error?.message || error,
     ).toLowerCase();
+    const code = error?.code ?? error?.error?.code;
 
     let finalError = "Failed to unlock content";
 
     if (errString.includes("insufficient funds")) {
-      finalError = "Insufficient funds";
-    } else if (
-      errString.includes("user rejected") ||
-      errString.includes("action_rejected")
-    ) {
+      finalError = "Insufficient funds (You need tRBTC for gas)";
+    } else if (errString.includes("user rejected") || errString.includes("action_rejected")) {
       finalError = "Transaction rejected by user";
+    } else if (errString.includes("content does not exist") || errString.includes("price not set")) {
+      finalError = "Content not found or Price is 0";
     } else if (
-      errString.includes("content does not exist") ||
-      errString.includes("price not set")
+      code === "SERVER_ERROR" ||
+      code === -32603 ||
+      errString.includes("internal server error") ||
+      errString.includes("processing response error")
     ) {
-      finalError = "Content ID not found or Price is 0";
+      finalError = "Network error: RPC rejected the transaction. Try again or switch network.";
     } else {
-      // If no specific message, show the raw error (truncated to avoid huge logs)
-      finalError = errString.slice(0, 100);
+      finalError = errString.slice(0, 120);
     }
-    // --- SAFETY FIX END ---
 
     return { success: false, error: finalError };
   }
 };
-
 /**
  * Listen for ContentUnlocked events for a specific user
  */
@@ -144,9 +161,6 @@ export const listenForUnlockEvents = (
 
     // Create filter for user's unlock events
     const filter = contract.filters.ContentUnlocked(userAddress);
-
-    console.log("Setting up event listener for user:", userAddress);
-
     // Listen for events
     contract.on(
       filter,
@@ -156,12 +170,6 @@ export const listenForUnlockEvents = (
         price: ethers.BigNumber,
         timestamp: ethers.BigNumber,
       ) => {
-        console.log("ContentUnlocked event received:", {
-          user,
-          contentId,
-          price: price.toString(),
-          timestamp: timestamp.toNumber(),
-        });
 
         callback({
           user,
@@ -174,7 +182,6 @@ export const listenForUnlockEvents = (
 
     // Return cleanup function
     return () => {
-      console.log("Cleaning up event listener");
       contract.removeAllListeners(filter);
     };
   } catch (error) {
@@ -200,9 +207,6 @@ export const listenForAllUnlockEvents = (
 
     // Create filter for all unlock events
     const filter = contract.filters.ContentUnlocked();
-
-    console.log("Setting up global event listener");
-
     // Listen for events
     contract.on(
       filter,
@@ -212,12 +216,6 @@ export const listenForAllUnlockEvents = (
         price: ethers.BigNumber,
         timestamp: ethers.BigNumber,
       ) => {
-        console.log("ContentUnlocked event received:", {
-          user,
-          contentId,
-          price: price.toString(),
-          timestamp: timestamp.toNumber(),
-        });
 
         callback({
           user,
@@ -230,7 +228,6 @@ export const listenForAllUnlockEvents = (
 
     // Return cleanup function
     return () => {
-      console.log("Cleaning up global event listener");
       contract.removeAllListeners(filter);
     };
   } catch (error) {

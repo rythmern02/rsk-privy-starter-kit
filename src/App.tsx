@@ -1,91 +1,72 @@
 "use client";
 
+import { Route, BrowserRouter as Router, Routes, Link } from "react-router-dom";
 import ConnectButton from "./components/ConnectButton";
-import Dashboard from "./pages/Dashboard";
+import { Dashboard } from "./pages/Dashboard";
+import { Etherspot, Home, Wagmi } from "./pages"; // Ensure these exports exist in your pages/index.ts
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-black bg-opacity-50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-orange-500 to-red-500 p-2 rounded-lg">
-                <svg
-                  className="w-8 h-8 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">
-                  SocialFi <span className="text-orange-400">Paywall</span>
-                </h1>
-                <p className="text-xs text-gray-500">Powered by Rootstock</p>
-              </div>
-            </div>
-
-            {/* Navigation & Connect Button */}
-            <div className="flex items-center gap-6">
-              <nav className="hidden md:flex items-center gap-6">
-                <a
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors text-sm font-medium"
-                >
-                  Explore
-                </a>
-
-                <a
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors text-sm font-medium"
-                >
-                  My Content
-                </a>
-
-                <a
-                  href="https://faucet.rootstock.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors text-sm font-medium flex items-center gap-1"
-                >
-                  Get Testnet Tokens
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
+    <Router>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex flex-col justify-between">
+        
+        {/* Header / Navbar */}
+        <header className="border-b border-gray-800 bg-black bg-opacity-50 backdrop-blur-sm sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              {/* Logo - Wrapped in Link to return Home */}
+              <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                <div className="bg-gradient-to-br from-orange-500 to-red-500 p-2 rounded-lg">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                </a>
-              </nav>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white">
+                    SocialFi <span className="text-orange-400">Paywall</span>
+                  </h1>
+                  <p className="text-xs text-gray-500">Powered by Rootstock</p>
+                </div>
+              </Link>
 
-              {/* Using Your ConnectButton Component */}
-              <ConnectButton />
+              {/* Navigation & Connect Button */}
+              <div className="flex items-center gap-6">
+                <nav className="hidden md:flex items-center gap-6">
+                  {/* Updated Navigation Links */}
+                  <Link to="/" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+                    Dashboard
+                  </Link>
+                  <Link to="/aa" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+                    Account Abstraction
+                  </Link>
+                  <Link to="/wagmi" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+                    Wagmi Demo
+                  </Link>
+                  <a
+                    href="https://faucet.rootstock.io"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-white transition-colors text-sm font-medium flex items-center gap-1"
+                  >
+                    Faucet <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </a>
+                </nav>
+
+                <ConnectButton />
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main>
-        <Dashboard />
-      </main>
+        {/* Dynamic Route Content */}
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/home-demo" element={<Home />} />
+            <Route path="/aa" element={<Etherspot />} />
+            <Route path="/wagmi" element={<Wagmi />} />
+          </Routes>
+        </main>
 
       {/* Footer */}
       <footer className="border-t border-gray-800 bg-black bg-opacity-50 mt-20">
@@ -265,19 +246,20 @@ export default function App() {
               </span>
               <span>•</span>
               <a
-                href={`https://explorer.testnet.rsk.co/address/${process.env.NEXT_PUBLIC_CONTRACT_ADDRESS}`}
+                href={`https://explorer.testnet.rsk.co/address/${import.meta.env.VITE_PUBLIC_CONTRACT_ADDRESS}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-orange-400 transition-colors"
               >
                 Contract:{" "}
-                {process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.slice(0, 6)}...
-                {process.env.NEXT_PUBLIC_CONTRACT_ADDRESS?.slice(-4)}
+                {import.meta.env.VITE_PUBLIC_CONTRACT_ADDRESS?.slice(0, 6)}...
+                {import.meta.env.VITE_PUBLIC_CONTRACT_ADDRESS?.slice(-4)}
               </a>
             </div>
           </div>
         </div>
       </footer>
     </div>
+    </Router>
   );
 }

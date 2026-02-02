@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAccount } from "wagmi";
 import { ethers } from "ethers";
-import { useWallets } from "@privy-io/react-auth";
-import { checkAccess, getContentPrice } from "../utils/contract";
 
 import PaymentModal from "./PaymentModal";
 
@@ -15,6 +13,10 @@ interface ContentCardProps {
   previewContent: string;
   fullContent: string;
   imageUrl?: string;
+  /** From contract: checkMultipleAccess / hasAccess */
+  hasAccess: boolean;
+  /** From contract: contentPrices(contentId) — in wei (bigint) */
+  price: bigint;
   onUnlock?: () => void;
 }
 
@@ -25,66 +27,19 @@ export default function ContentCard({
   previewContent,
   fullContent,
   imageUrl,
+  hasAccess,
+  price,
   onUnlock,
 }: ContentCardProps) {
-  const [hasAccess, setHasAccess] = useState(false);
-  const [price, setPrice] = useState<ethers.BigNumber | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const { address } = useAccount();
-  const { wallets } = useWallets();
-
-  useEffect(() => {
-    const loadContentData = async () => {
-      // Don't return if address is missing, we still want to show the price
-      // and we want to stop loading even if not connected
-      try {
-        setIsLoading(true);
-        
-        // If not connected, we can't check access but we might be able to get price
-        // using a public provider or by just skipping access check
-        if (address && wallets[0]) {
-          const provider = await wallets[0].getEthereumProvider();
-          const ethersProvider = new ethers.providers.Web3Provider(provider);
-
-          // Check if user has access
-          const access = await checkAccess(ethersProvider, address, contentId);
-          setHasAccess(access);
-
-          // Get content price
-          const contentPrice = await getContentPrice(ethersProvider, contentId);
-          setPrice(contentPrice);
-        } else {
-          // If not connected, we should still try to get the price using a public provider
-          // for now let's just use a hardcoded fallback or wait for connection
-          setHasAccess(false);
-          // In a real app, you'd use a public RPC here if wallets[0] is missing
-          // But to fix the "refreshing" issue, we MUST ensure setIsLoading(false) runs
-        }
-      } catch (error) {
-        console.error("Error loading content data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadContentData();
-  }, [address, contentId, wallets]);
 
   const handleUnlockClick = () => {
     setShowPaymentModal(true);
   };
 
-  if (isLoading) {
-    return (
-      <div className="bg-gray-800 rounded-xl p-6 animate-pulse">
-        <div className="h-48 bg-gray-700 rounded-lg mb-4"></div>
-        <div className="h-6 bg-gray-700 rounded w-3/4 mb-2"></div>
-        <div className="h-4 bg-gray-700 rounded w-full mb-4"></div>
-      </div>
-    );
-  }
+  const priceAsBigNumber = ethers.BigNumber.from(price.toString());
 
   return (
     <>
@@ -121,9 +76,9 @@ export default function ContentCard({
         <div className="p-6">
           <div className="flex items-start justify-between mb-3">
             <h3 className="text-xl font-bold text-white">{title}</h3>
-            {!hasAccess && price && (
+            {!hasAccess && price > 0n && (
               <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                {ethers.utils.formatEther(price)} rBTC
+                {ethers.utils.formatEther(priceAsBigNumber)} rBTC
               </span>
             )}
             {hasAccess && (
@@ -208,15 +163,14 @@ export default function ContentCard({
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {showPaymentModal && price && (
+      {/* Payment Modal — uses contract price (msg.value) for unlockContent */}
+      {showPaymentModal && price > 0n && (
         <PaymentModal
           contentId={contentId}
           title={title}
-          price={price}
+          price={priceAsBigNumber}
           onClose={() => setShowPaymentModal(false)}
           onSuccess={() => {
-            setHasAccess(true);
             setShowPaymentModal(false);
             onUnlock?.();
           }}

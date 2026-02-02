@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import type { Abi } from "viem";
+import { rootstockTestnet } from "viem/chains";
 import ContentCard from "../components/ContentCard";
+import { CONTENT_PAYWALL_ADDRESS } from "../lib/constants";
+import { abi as ContentPaywallABI } from "../assets/abis/ContentPaywall";
 
-// Sample content data - in production, fetch from your backend/API
-const CONTENT_ITEMS = [
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const CONTENT_IDS = ["0", "1", "2"] as const;
+
+// Display-only metadata (not on-chain). Access and price come from the contract.
+const CONTENT_META = [
   {
     contentId: "0",
     title: "Bitcoin Security Deep Dive",
@@ -23,7 +31,7 @@ The process works through a clever cryptographic technique where RSK block hashe
 
 For developers, this means you can build with confidence knowing your smart contracts are protected by the most secure blockchain network in existence.`,
     imageUrl:
-      "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=800&q=80",
+      "https://res.cloudinary.com/ducsu6916/image/upload/v1770028051/photo-1639762681485-074b7f938ba0_ptmkor.jpg",
   },
   {
     contentId: "1",
@@ -62,7 +70,7 @@ Module 5: Advanced Topics
 Total Duration: 8 hours
 Includes: Source code, exercises, and project templates`,
     imageUrl:
-      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
+      "https://res.cloudinary.com/ducsu6916/image/upload/v1770028051/photo-1551288049-bebda4e38f71_bl4uh7.jpg",
   },
   {
     contentId: "2",
@@ -110,17 +118,46 @@ Market Projections:
 
 This report includes 50+ charts, detailed analysis, and actionable insights for investors and builders.`,
     imageUrl:
-      "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80",
+      "https://res.cloudinary.com/ducsu6916/image/upload/v1770028051/photo-1460925895917-afdab827c52f_hofi2s.jpg",
   },
 ];
 
-export default function Dashboard() {
+export function Dashboard() {
   const { authenticated } = usePrivy();
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { address } = useAccount();
+
+  const { data: accessList, refetch: refetchAccess, isLoading: isLoadingAccess } = useReadContract({
+    address: CONTENT_PAYWALL_ADDRESS as `0x${string}`,
+    abi: ContentPaywallABI as Abi,
+    functionName: "checkMultipleAccess",
+    args: [address ?? ZERO_ADDRESS, [...CONTENT_IDS]],
+    chainId: rootstockTestnet.id,
+  });
+
+  const { data: pricesData, refetch: refetchPrices, isLoading: isLoadingPrices } = useReadContracts({
+    contracts: CONTENT_IDS.map((id) => ({
+      address: CONTENT_PAYWALL_ADDRESS as `0x${string}`,
+      abi: ContentPaywallABI as Abi,
+      functionName: "contentPrices" as const,
+      args: [id],
+      chainId: rootstockTestnet.id,
+    })),
+  });
+
+  const isLoading = isLoadingAccess || isLoadingPrices;
+
+  const contentItems = useMemo(() => {
+    const access = (accessList as boolean[] | undefined) ?? [];
+    return CONTENT_META.map((meta, i) => ({
+      ...meta,
+      hasAccess: access[i] ?? false,
+      price: (pricesData?.[i]?.result as bigint | undefined) ?? 0n,
+    }));
+  }, [accessList, pricesData]);
 
   const handleUnlock = () => {
-    // Refresh the dashboard to show updated access
-    setRefreshKey((prev) => prev + 1);
+    refetchAccess();
+    refetchPrices();
   };
 
   return (
@@ -160,7 +197,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-gray-400 text-sm">Available Content</p>
                   <p className="text-white text-2xl font-bold">
-                    {CONTENT_ITEMS.length}
+                    {contentItems.length}
                   </p>
                 </div>
               </div>
@@ -254,13 +291,35 @@ export default function Dashboard() {
 
         {/* Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {CONTENT_ITEMS.map((item) => (
-            <ContentCard
-              key={`${item.contentId}-${refreshKey}`}
-              {...item}
-              onUnlock={handleUnlock}
-            />
-          ))}
+          {isLoading ? (
+            <>
+              {CONTENT_IDS.map((id) => (
+                <div
+                  key={id}
+                  className="bg-gray-800 rounded-xl p-6 animate-pulse"
+                >
+                  <div className="h-48 bg-gray-700 rounded-lg mb-4" />
+                  <div className="h-6 bg-gray-700 rounded w-3/4 mb-2" />
+                  <div className="h-4 bg-gray-700 rounded w-full mb-4" />
+                </div>
+              ))}
+            </>
+          ) : (
+            contentItems.map((item) => (
+              <ContentCard
+                key={item.contentId}
+                contentId={item.contentId}
+                title={item.title}
+                description={item.description}
+                previewContent={item.previewContent}
+                fullContent={item.fullContent}
+                imageUrl={item.imageUrl}
+                hasAccess={item.hasAccess}
+                price={item.price}
+                onUnlock={handleUnlock}
+              />
+            ))
+          )}
         </div>
 
         {/* Footer Info */}

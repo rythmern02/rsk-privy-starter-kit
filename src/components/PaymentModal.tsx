@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { useWallets } from "@privy-io/react-auth";
 import { unlockContent } from "../utils/contract";
+
+const COINGECKO_BTC_USD_URL =
+  "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd";
 
 interface PaymentModalProps {
   contentId: string;
@@ -23,8 +26,26 @@ export default function PaymentModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [btcUsdPrice, setBtcUsdPrice] = useState<number | null>(null);
 
   const { wallets } = useWallets();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(COINGECKO_BTC_USD_URL)
+      .then((res) => res.json())
+      .then((data: { bitcoin?: { usd?: number } }) => {
+        if (cancelled) return;
+        const usd = data?.bitcoin?.usd;
+        if (typeof usd === "number") setBtcUsdPrice(usd);
+      })
+      .catch(() => {
+        if (!cancelled) setBtcUsdPrice(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handlePayment = async () => {
     if (!wallets[0]) {
@@ -101,7 +122,9 @@ export default function PaymentModal({
               {ethers.utils.formatEther(price)} rBTC
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              ≈ ${(parseFloat(ethers.utils.formatEther(price)) * 50000).toFixed(2)} USD
+              {btcUsdPrice != null
+                ? `≈ $${(parseFloat(ethers.utils.formatEther(price)) * btcUsdPrice).toFixed(2)} USD`
+                : "≈ — USD (loading…)"}
             </p>
           </div>
 
