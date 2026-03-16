@@ -9,7 +9,7 @@ export default function Starters(): React.JSX.Element {
         <p className="text-white/70">Starter kits</p>
         <h2 className="text-3xl font-bold">Dive into these starters</h2>
       </header>
-      <div className="container mx-auto my-12 grid grid-cols-1 gap-6 md:grid-cols-2 max-w-3xl">
+      <div className="container mx-auto my-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 max-w-5xl">
         {starters.map((starter) => (
           <StarterCard key={starter.name} starter={starter} />
         ))}
@@ -31,4 +31,10 @@ const starters: StarterProps[] = [
       "Kickstart your project with the Account Abstraction Starter Kit. This kit provides a foundation for building applications with account abstraction, including sample implementations and documentation.",
     link: "/aa",
   },
+  {
+    name: "SocialFi Paywall Starter Kit",
+    description:
+      "A decentralized content marketplace powered by Rootstock's Bitcoin-secured blockchain. Unlock premium content with frictionless social authentication and micropayments.",
+    link: "/dashboard",
+  }
 ];
