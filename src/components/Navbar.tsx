@@ -9,7 +9,24 @@ export default function Navbar(): JSX.Element {
       <Link to="/">
         <Logo className="w-[150px] h-[50px]" />
       </Link>
-      <ConnectButton/>
+
+      {/* Navigation links */}
+      <div className="hidden md:flex items-center gap-6 text-sm font-medium">
+        <Link to="/" className="text-gray-300 hover:text-white transition-colors">
+          Home
+        </Link>
+        <Link to="/dashboard" className="text-gray-300 hover:text-white transition-colors">
+          SocialFi Paywall
+        </Link>
+        <Link to="/aa" className="text-gray-300 hover:text-white transition-colors">
+          Account Abstraction
+        </Link>
+        <Link to="/wagmi" className="text-gray-300 hover:text-white transition-colors">
+          Wagmi Demo
+        </Link>
+      </div>
+
+      <ConnectButton />
     </nav>
   );
 }

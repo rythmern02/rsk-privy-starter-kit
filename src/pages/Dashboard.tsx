@@ -1,4 +1,4 @@
-"use client";
+// NOTE: "use client" is a Next.js directive and has no effect in Vite + React projects. Removed.
 
 import { useMemo } from "react";
 import { usePrivy } from "@privy-io/react-auth";
@@ -12,6 +12,9 @@ import { abi as ContentPaywallABI } from "../assets/abis/ContentPaywall";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const CONTENT_IDS = ["0", "1", "2"] as const;
 
+// DEMO NOTE: The fullContent strings below are hardcoded client-side for demonstration purposes.
+// In a production application, premium content MUST be served from a backend API after
+// verifying on-chain access — client-side content is always visible in the JS bundle.
 // Display-only metadata (not on-chain). Access and price come from the contract.
 const CONTENT_META = [
   {

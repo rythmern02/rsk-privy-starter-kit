@@ -19,12 +19,13 @@ export default defineConfig({
       plugins: [NodeGlobalsPolyfillPlugin({ process: true, buffer: true })],
     },
   },
+  // Standard local development server config.
+  // NOTE: The previous Replit-specific settings (host: '0.0.0.0', allowedHosts: true,
+  // hmr: { clientPort: 443 }) have been removed. Those settings disabled host checking
+  // (DNS rebinding risk) and assumed an HTTPS reverse proxy, which broke local dev.
+  // If deploying to Replit or a similar platform, configure via environment variables
+  // or a separate vite.replit.config.ts file rather than modifying this base config.
   server: {
-    host: '0.0.0.0',
-    port: 5173, 
-    hmr: {
-      clientPort: 443,
-    },
-    allowedHosts: true,
+    port: 5173,
   },
 });

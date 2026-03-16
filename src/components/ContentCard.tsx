@@ -1,4 +1,4 @@
-"use client";
+// NOTE: "use client" is a Next.js directive and has no effect in Vite + React projects. Removed.
 
 import { useState } from "react";
 import { useAccount } from "wagmi";

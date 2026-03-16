@@ -16,7 +16,8 @@ export const ROOTSTOCK_TESTNET = {
 };
 
 /**
- * Get contract instance with provider or signer
+ * Get a contract instance bound to a signer or provider.
+ * This is the core utility used by all other functions in this file.
  */
 export const getContract = (
   signerOrProvider: ethers.Signer | ethers.providers.Provider,
@@ -32,43 +33,12 @@ export const getContract = (
 };
 
 /**
- * Check if user has access to specific content
- */
-export const checkAccess = async (
-  provider: ethers.providers.Provider,
-  userAddress: string,
-  contentId: string,
-): Promise<boolean> => {
-  try {
-    const contract = getContract(provider);
-    const hasAccess = await contract.hasAccess(userAddress, contentId);
-    return hasAccess;
-  } catch (error) {
-    console.error("Error checking access:", error);
-    return false;
-  }
-};
-
-/**
- * Get price for specific content
- */
-export const getContentPrice = async (
-  provider: ethers.providers.Provider,
-  contentId: string,
-): Promise<ethers.BigNumber> => {
-  try {
-    const contract = getContract(provider);
-    const price = await contract.contentPrices(contentId);
-    return price;
-  } catch (error) {
-    console.error("Error getting content price:", error);
-    return ethers.BigNumber.from(0);
-  }
-};
-
-/**
- * Unlock content by paying with dynamic gas estimation.
- * Uses legacy tx (type 0 + gasPrice) for Rootstock/RSK compatibility.
+ * Unlock content by paying with rBTC.
+ *
+ * ACTIVELY USED: This is the primary write function imported by PaymentModal.tsx.
+ *
+ * Uses legacy transactions (type 0 + gasPrice) for Rootstock/RSK compatibility,
+ * since Rootstock does not support EIP-1559.
  */
 export const unlockContent = async (
   signer: ethers.Signer,
@@ -143,220 +113,43 @@ export const unlockContent = async (
     return { success: false, error: finalError };
   }
 };
-/**
- * Listen for ContentUnlocked events for a specific user
- */
-export const listenForUnlockEvents = (
-  provider: ethers.providers.Provider,
-  userAddress: string,
-  callback: (event: {
-    user: string;
-    contentId: string;
-    price: string;
-    timestamp: number;
-  }) => void,
-) => {
-  try {
-    const contract = getContract(provider);
 
-    // Create filter for user's unlock events
-    const filter = contract.filters.ContentUnlocked(userAddress);
-    // Listen for events
-    contract.on(
-      filter,
-      (
-        user: string,
-        contentId: string,
-        price: ethers.BigNumber,
-        timestamp: ethers.BigNumber,
-      ) => {
+// ---------------------------------------------------------------------------
+// Utility functions — available for builders extending this starter kit.
+// The functions below are NOT currently imported by the UI but are provided
+// as ready-to-use helpers. Remove any you don't need to keep your bundle lean.
+// ---------------------------------------------------------------------------
 
-        callback({
-          user,
-          contentId,
-          price: price.toString(),
-          timestamp: timestamp.toNumber(),
-        });
-      },
-    );
-
-    // Return cleanup function
-    return () => {
-      contract.removeAllListeners(filter);
-    };
-  } catch (error) {
-    console.error("Error setting up event listener:", error);
-    return () => {};
-  }
-};
-
-/**
- * Listen for all ContentUnlocked events (not user-specific)
- */
-export const listenForAllUnlockEvents = (
-  provider: ethers.providers.Provider,
-  callback: (event: {
-    user: string;
-    contentId: string;
-    price: string;
-    timestamp: number;
-  }) => void,
-) => {
-  try {
-    const contract = getContract(provider);
-
-    // Create filter for all unlock events
-    const filter = contract.filters.ContentUnlocked();
-    // Listen for events
-    contract.on(
-      filter,
-      (
-        user: string,
-        contentId: string,
-        price: ethers.BigNumber,
-        timestamp: ethers.BigNumber,
-      ) => {
-
-        callback({
-          user,
-          contentId,
-          price: price.toString(),
-          timestamp: timestamp.toNumber(),
-        });
-      },
-    );
-
-    // Return cleanup function
-    return () => {
-      contract.removeAllListeners(filter);
-    };
-  } catch (error) {
-    console.error("Error setting up global event listener:", error);
-    return () => {};
-  }
-};
-
-/**
- * Get contract statistics
- */
-export const getContractStats = async (
-  provider: ethers.providers.Provider,
-): Promise<{
-  totalBalance: ethers.BigNumber;
-  totalUnlocks: number;
-}> => {
-  try {
-    const contract = getContract(provider);
-
-    const [balance, unlocks] = await Promise.all([
-      contract.getContractBalance(),
-      contract.totalUnlocks(),
-    ]);
-
-    return {
-      totalBalance: balance,
-      totalUnlocks: unlocks.toNumber(),
-    };
-  } catch (error) {
-    console.error("Error getting contract stats:", error);
-    return {
-      totalBalance: ethers.BigNumber.from(0),
-      totalUnlocks: 0,
-    };
-  }
-};
-
-/**
- * Check multiple content access at once (batch operation)
- */
-export const checkMultipleAccess = async (
-  provider: ethers.providers.Provider,
-  userAddress: string,
-  contentIds: string[],
-): Promise<boolean[]> => {
-  try {
-    const contract = getContract(provider);
-
-    // Check if contract has batch function
-    if (contract.checkMultipleAccess) {
-      const accessList = await contract.checkMultipleAccess(
-        userAddress,
-        contentIds,
-      );
-      return accessList;
-    }
-
-    // Fallback to individual checks
-    const accessChecks = await Promise.all(
-      contentIds.map((id) => contract.hasAccess(userAddress, id)),
-    );
-
-    return accessChecks;
-  } catch (error) {
-    console.error("Error checking multiple access:", error);
-    return contentIds.map(() => false);
-  }
-};
-
-/**
- * Get prices for multiple content items (batch operation)
- */
-export const getMultipleContentPrices = async (
-  provider: ethers.providers.Provider,
-  contentIds: string[],
-): Promise<ethers.BigNumber[]> => {
-  try {
-    const contract = getContract(provider);
-
-    const prices = await Promise.all(
-      contentIds.map((id) => contract.contentPrices(id)),
-    );
-
-    return prices;
-  } catch (error) {
-    console.error("Error getting multiple content prices:", error);
-    return contentIds.map(() => ethers.BigNumber.from(0));
-  }
-};
-
-/**
- * Get detailed content info (price + user access)
- */
-export const getContentInfo = async (
+/** Check if a user has access to a specific content item. */
+export const checkAccess = async (
   provider: ethers.providers.Provider,
   userAddress: string,
   contentId: string,
-): Promise<{
-  price: ethers.BigNumber;
-  hasAccess: boolean;
-  priceFormatted: string;
-}> => {
+): Promise<boolean> => {
   try {
     const contract = getContract(provider);
-
-    const [price, hasAccess] = await Promise.all([
-      contract.contentPrices(contentId),
-      contract.hasAccess(userAddress, contentId),
-    ]);
-
-    return {
-      price,
-      hasAccess,
-      priceFormatted: ethers.utils.formatEther(price),
-    };
+    return await contract.hasAccess(userAddress, contentId);
   } catch (error) {
-    console.error("Error getting content info:", error);
-    return {
-      price: ethers.BigNumber.from(0),
-      hasAccess: false,
-      priceFormatted: "0",
-    };
+    console.error("Error checking access:", error);
+    return false;
   }
 };
 
-/**
- * Format rBTC amount for display
- */
+/** Get the price (in wei) for a specific content item. */
+export const getContentPrice = async (
+  provider: ethers.providers.Provider,
+  contentId: string,
+): Promise<ethers.BigNumber> => {
+  try {
+    const contract = getContract(provider);
+    return await contract.contentPrices(contentId);
+  } catch (error) {
+    console.error("Error getting content price:", error);
+    return ethers.BigNumber.from(0);
+  }
+};
+
+/** Format a wei BigNumber as a human-readable rBTC string. */
 export const formatRBTC = (
   amount: ethers.BigNumber,
   decimals: number = 4,
@@ -364,9 +157,7 @@ export const formatRBTC = (
   return parseFloat(ethers.utils.formatEther(amount)).toFixed(decimals);
 };
 
-/**
- * Parse rBTC amount from string
- */
+/** Parse a decimal rBTC string into a wei BigNumber. */
 export const parseRBTC = (amount: string): ethers.BigNumber => {
   try {
     return ethers.utils.parseEther(amount);
@@ -376,38 +167,7 @@ export const parseRBTC = (amount: string): ethers.BigNumber => {
   }
 };
 
-/**
- * Get transaction URL for block explorer
- */
-export const getTxUrl = (txHash: string): string => {
-  return `${ROOTSTOCK_TESTNET.blockExplorer}/tx/${txHash}`;
-};
-
-/**
- * Get address URL for block explorer
- */
-export const getAddressUrl = (address: string): string => {
-  return `${ROOTSTOCK_TESTNET.blockExplorer}/address/${address}`;
-};
-
-/**
- * Get contract URL for block explorer
- */
-export const getContractUrl = (): string => {
-  return `${ROOTSTOCK_TESTNET.blockExplorer}/address/${CONTENT_PAYWALL_ADDRESS}`;
-};
-
-/**
- * Shorten address for display (0x1234...5678)
- */
-export const shortenAddress = (address: string, chars: number = 4): string => {
-  if (!address) return "";
-  return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
-};
-
-/**
- * Validate if string is valid Ethereum address
- */
+/** Validate whether a string is a valid Ethereum address. */
 export const isValidAddress = (address: string): boolean => {
   try {
     return ethers.utils.isAddress(address);
@@ -416,151 +176,23 @@ export const isValidAddress = (address: string): boolean => {
   }
 };
 
-/**
- * Get user's unlock history from events
- */
-export const getUserUnlockHistory = async (
-  provider: ethers.providers.Provider,
-  userAddress: string,
-  fromBlock: number = 0,
-): Promise<
-  Array<{
-    contentId: string;
-    price: string;
-    timestamp: number;
-    transactionHash: string;
-    blockNumber: number;
-  }>
-> => {
-  try {
-    const contract = getContract(provider);
-
-    // Create filter for user's unlock events
-    const filter = contract.filters.ContentUnlocked(userAddress);
-
-    // Query past events
-    const events = await contract.queryFilter(filter, fromBlock);
-
-    // Format events
-    return events.map((event) => ({
-      contentId: event.args?.contentId || "",
-      price: event.args?.price?.toString() || "0",
-      timestamp: event.args?.timestamp?.toNumber() || 0,
-      transactionHash: event.transactionHash,
-      blockNumber: event.blockNumber,
-    }));
-  } catch (error) {
-    console.error("Error getting unlock history:", error);
-    return [];
-  }
+/** Shorten an address for display (0x1234...5678). */
+export const shortenAddress = (address: string, chars: number = 4): string => {
+  if (!address) return "";
+  return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
 };
 
-/**
- * Get recent unlock events across all users
- */
-export const getRecentUnlocks = async (
-  provider: ethers.providers.Provider,
-  limit: number = 10,
-): Promise<
-  Array<{
-    user: string;
-    contentId: string;
-    price: string;
-    timestamp: number;
-    transactionHash: string;
-  }>
-> => {
-  try {
-    const contract = getContract(provider);
+/** Return the block explorer URL for a transaction hash. */
+export const getTxUrl = (txHash: string): string =>
+  `${ROOTSTOCK_TESTNET.blockExplorer}/tx/${txHash}`;
 
-    // Get current block
-    const currentBlock = await provider.getBlockNumber();
-    const fromBlock = Math.max(0, currentBlock - 10000); // Last ~10k blocks
+/** Return the block explorer URL for a wallet address. */
+export const getAddressUrl = (address: string): string =>
+  `${ROOTSTOCK_TESTNET.blockExplorer}/address/${address}`;
 
-    // Create filter for all unlock events
-    const filter = contract.filters.ContentUnlocked();
+/** Return the block explorer URL for the ContentPaywall contract. */
+export const getContractUrl = (): string =>
+  `${ROOTSTOCK_TESTNET.blockExplorer}/address/${CONTENT_PAYWALL_ADDRESS}`;
 
-    // Query past events
-    const events = await contract.queryFilter(filter, fromBlock);
-
-    // Format and sort events (most recent first)
-    const formattedEvents = events
-      .map((event) => ({
-        user: event.args?.user || "",
-        contentId: event.args?.contentId || "",
-        price: event.args?.price?.toString() || "0",
-        timestamp: event.args?.timestamp?.toNumber() || 0,
-        transactionHash: event.transactionHash,
-      }))
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit);
-
-    return formattedEvents;
-  } catch (error) {
-    console.error("Error getting recent unlocks:", error);
-    return [];
-  }
-};
-
-/**
- * Estimate gas cost for unlocking content
- */
-export const estimateUnlockGas = async (
-  provider: ethers.providers.Provider,
-  signer: ethers.Signer,
-  contentId: string,
-  price: ethers.BigNumber,
-): Promise<{
-  gasLimit: ethers.BigNumber;
-  gasCost: ethers.BigNumber;
-  totalCost: ethers.BigNumber;
-}> => {
-  try {
-    const contract = getContract(signer);
-
-    // Estimate gas
-    const gasLimit = await contract.estimateGas.unlockContent(contentId, {
-      value: price,
-    });
-
-    // Get gas price
-    const gasPrice = await provider.getGasPrice();
-
-    // Calculate costs
-    const gasCost = gasLimit.mul(gasPrice);
-    const totalCost = price.add(gasCost);
-
-    return {
-      gasLimit,
-      gasCost,
-      totalCost,
-    };
-  } catch (error) {
-    console.error("Error estimating gas:", error);
-    return {
-      gasLimit: ethers.BigNumber.from(0),
-      gasCost: ethers.BigNumber.from(0),
-      totalCost: price,
-    };
-  }
-};
-
-/**
- * Check if user has sufficient balance
- */
-export const checkSufficientBalance = async (
-  provider: ethers.providers.Provider,
-  userAddress: string,
-  requiredAmount: ethers.BigNumber,
-): Promise<boolean> => {
-  try {
-    const balance = await provider.getBalance(userAddress);
-    return balance.gte(requiredAmount);
-  } catch (error) {
-    console.error("Error checking balance:", error);
-    return false;
-  }
-};
-
-// Export contract address for convenience
+// Re-export for convenience
 export { CONTENT_PAYWALL_ADDRESS as CONTRACT_ADDRESS };

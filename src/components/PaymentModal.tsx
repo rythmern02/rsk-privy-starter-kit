@@ -1,9 +1,10 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { useWallets } from "@privy-io/react-auth";
 import { unlockContent } from "../utils/contract";
+
+// Rootstock Testnet chain ID
+const ROOTSTOCK_TESTNET_CHAIN_ID = 31;
 
 const COINGECKO_BTC_USD_URL =
   "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd";
@@ -48,7 +49,8 @@ export default function PaymentModal({
   }, []);
 
   const handlePayment = async () => {
-    if (!wallets[0]) {
+    const wallet = wallets[0];
+    if (!wallet) {
       setError("No wallet connected");
       return;
     }
@@ -57,7 +59,27 @@ export default function PaymentModal({
       setIsProcessing(true);
       setError(null);
 
-      const provider = await wallets[0].getEthereumProvider();
+      // --- Chain verification ---
+      // Ensure the wallet is on Rootstock Testnet (chainId 31) before sending
+      // any transaction. If not, attempt a chain switch.
+      const currentChainId =
+        typeof wallet.chainId === "string"
+          ? parseInt(wallet.chainId.split(":").pop() ?? "0", 10)
+          : wallet.chainId;
+
+      if (currentChainId !== ROOTSTOCK_TESTNET_CHAIN_ID) {
+        try {
+          await wallet.switchChain(ROOTSTOCK_TESTNET_CHAIN_ID);
+        } catch {
+          setError(
+            "Please switch your wallet to Rootstock Testnet (chain ID 31) and try again."
+          );
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.providers.Web3Provider(provider);
       const signer = ethersProvider.getSigner();
 
@@ -67,7 +89,7 @@ export default function PaymentModal({
       if (result.success && result.receipt) {
         setTxHash(result.receipt.transactionHash);
 
-        // Wait a moment for the blockchain to update
+        // Wait a moment for the blockchain to update before triggering refresh
         setTimeout(() => {
           onSuccess();
         }, 2000);

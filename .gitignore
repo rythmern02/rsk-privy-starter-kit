@@ -28,8 +28,15 @@ dist-ssr
 *.sw?
 
 # package manager
-
 .package-lock.json
+package-lock.json
 yarn.lock
 pnpm-lock.yaml
 .vercel
+
+# Replit development artifacts — do not commit to the repository
+.replit
+replit.md
+"REPLIT README.md"
+attached_assets/
+generated-icon.png
