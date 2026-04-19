@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * ConnectButton Component
  *

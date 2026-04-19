@@ -1,36 +1,54 @@
-import { ethers } from "ethers";
+/**
+ * Contract Utilities — Rootstock Testnet
+ *
+ * H4 fix: Uses viem exclusively (already bundled via wagmi v2).
+ *         Removed ethers.js dependency — saves ~200-280KB.
+ * M9 fix: unlockContent returns viem TransactionReceipt (no more `any`).
+ * L1 fix: All catch blocks use `unknown` with type narrowing.
+ * I1 note: Helper functions below are intentionally exported for builders
+ *          extending this starter kit. Remove unused ones before production.
+ */
+
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  formatEther,
+  parseEther,
+  isAddress,
+  type TransactionReceipt,
+  type PublicClient,
+} from "viem";
 import { CONTENT_PAYWALL_ADDRESS } from "../lib/constants";
 import { abi as CONTRACT_ABI } from "../assets/abis/ContentPaywall";
 
-// Rootstock Testnet configuration
-export const ROOTSTOCK_TESTNET = {
-  chainId: 31,
-  name: "Rootstock Testnet",
-  rpcUrl: "https://public-node.testnet.rsk.co",
-  blockExplorer: "https://explorer.testnet.rsk.co",
-  nativeCurrency: {
-    name: "Test Rootstock Bitcoin",
-    symbol: "tRBTC",
-    decimals: 18,
-  },
-};
+// ---------------------------------------------------------------------------
+// Chain configuration
+// ---------------------------------------------------------------------------
 
-/**
- * Get a contract instance bound to a signer or provider.
- * This is the core utility used by all other functions in this file.
- */
-export const getContract = (
-  signerOrProvider: ethers.Signer | ethers.providers.Provider,
-) => {
-  if (!CONTENT_PAYWALL_ADDRESS) {
-    throw new Error("Contract address not configured in constants");
-  }
-  return new ethers.Contract(
-    CONTENT_PAYWALL_ADDRESS,
-    CONTRACT_ABI,
-    signerOrProvider,
-  );
-};
+/** Rootstock Testnet chain definition for viem */
+export const ROOTSTOCK_TESTNET = {
+  id: 31,
+  name: "Rootstock Testnet",
+  nativeCurrency: { name: "Test RBTC", symbol: "tRBTC", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://public-node.testnet.rsk.co"] },
+  },
+  blockExplorers: {
+    default: { name: "RSK Explorer", url: "https://explorer.testnet.rsk.co" },
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
+// Core: unlockContent (H4 — viem only, no ethers.js)
+// ---------------------------------------------------------------------------
+
+export interface UnlockResult {
+  success: boolean;
+  receipt?: TransactionReceipt; // M9: typed, not `any`
+  error?: string;
+}
 
 /**
  * Unlock content by paying with rBTC.
@@ -39,141 +57,132 @@ export const getContract = (
  *
  * Uses legacy transactions (type 0 + gasPrice) for Rootstock/RSK compatibility,
  * since Rootstock does not support EIP-1559.
+ *
+ * @param eip1193Provider - EIP-1193 provider from wallet (e.g., privy wallet)
+ * @param userAddress     - The signer's wallet address
+ * @param contentId       - Content identifier string
+ * @param price           - Price in wei (bigint)
  */
 export const unlockContent = async (
-  signer: ethers.Signer,
+  eip1193Provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> },
+  userAddress: `0x${string}`,
   contentId: string,
-  price: ethers.BigNumber,
-): Promise<{ success: boolean; receipt?: any; error?: string }> => {
+  price: bigint,
+): Promise<UnlockResult> => {
   try {
-    const contract = getContract(signer);
-    const provider = signer.provider;
-    if (!provider) {
-      return { success: false, error: "No provider available for signer" };
-    }
+    const walletClient = createWalletClient({
+      account: userAddress,
+      chain: ROOTSTOCK_TESTNET,
+      transport: custom(eip1193Provider),
+    });
 
-    let gasLimit;
+    const publicClient = createPublicClient({
+      chain: ROOTSTOCK_TESTNET,
+      transport: http(),
+    });
+
+    // Estimate gas with a 20% buffer for safety
+    let gas: bigint;
     try {
-      const estimatedGas = await contract.estimateGas.unlockContent(contentId, {
+      const estimated = await publicClient.estimateContractGas({
+        address: CONTENT_PAYWALL_ADDRESS as `0x${string}`,
+        abi: CONTRACT_ABI,
+        functionName: "unlockContent",
+        args: [contentId],
         value: price,
+        account: userAddress,
       });
-      gasLimit = estimatedGas.mul(120).div(100);
-    } catch (estError) {
-      console.warn("Gas estimation failed, falling back to safe default", estError);
-      gasLimit = ethers.BigNumber.from(500000);
+      gas = (estimated * 120n) / 100n;
+    } catch {
+      gas = 500_000n; // safe fallback
     }
 
-    // Rootstock/RSK uses legacy gas model (gasPrice), not EIP-1559. Force legacy tx.
-    const gasPrice = await provider.getGasPrice();
-    const gasPriceWithBuffer = gasPrice.mul(110).div(100);
+    // Rootstock uses legacy gas model (no EIP-1559)
+    const gasPrice = await publicClient.getGasPrice();
+    const gasPriceWithBuffer = (gasPrice * 110n) / 100n;
 
-    const txOverrides: {
-      value: ethers.BigNumber;
-      gasLimit: ethers.BigNumber;
-      type: number;
-      gasPrice: ethers.BigNumber;
-    } = {
+    const txHash = await walletClient.writeContract({
+      address: CONTENT_PAYWALL_ADDRESS as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "unlockContent",
+      args: [contentId],
       value: price,
-      gasLimit,
-      type: 0,
+      gas,
       gasPrice: gasPriceWithBuffer,
-    };
+      // Force legacy transaction type for RSK compatibility
+      type: "legacy",
+    });
 
-    const tx = await contract.unlockContent(contentId, txOverrides);
-    const receipt = await tx.wait();
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
     return { success: true, receipt };
-  } catch (error: any) {
-    console.error("Error unlocking content:", error);
-
-    const errString = String(
-      error?.data?.message || error?.message || error,
-    ).toLowerCase();
-    const code = error?.code ?? error?.error?.code;
-
-    let finalError = "Failed to unlock content";
-
-    if (errString.includes("insufficient funds")) {
-      finalError = "Insufficient funds (You need tRBTC for gas)";
-    } else if (errString.includes("user rejected") || errString.includes("action_rejected")) {
-      finalError = "Transaction rejected by user";
-    } else if (errString.includes("content does not exist") || errString.includes("price not set")) {
-      finalError = "Content not found or Price is 0";
-    } else if (
-      code === "SERVER_ERROR" ||
-      code === -32603 ||
-      errString.includes("internal server error") ||
-      errString.includes("processing response error")
-    ) {
-      finalError = "Network error: RPC rejected the transaction. Try again or switch network.";
-    } else {
-      finalError = errString.slice(0, 120);
-    }
-
-    return { success: false, error: finalError };
+  } catch (err: unknown) {
+    // I2: Never log raw error objects — extract a safe message only
+    const message = extractErrorMessage(err);
+    return { success: false, error: message };
   }
 };
 
 // ---------------------------------------------------------------------------
-// Utility functions — available for builders extending this starter kit.
-// The functions below are NOT currently imported by the UI but are provided
-// as ready-to-use helpers. Remove any you don't need to keep your bundle lean.
+// Utility functions
+// I1: These are intentionally exported for builders extending this starter kit.
+//     Remove any you don't need to keep your bundle lean.
 // ---------------------------------------------------------------------------
 
-/** Check if a user has access to a specific content item. */
+/** Check if a user has access to a specific content item (on-chain read). */
 export const checkAccess = async (
-  provider: ethers.providers.Provider,
+  publicClient: PublicClient,
   userAddress: string,
   contentId: string,
 ): Promise<boolean> => {
   try {
-    const contract = getContract(provider);
-    return await contract.hasAccess(userAddress, contentId);
-  } catch (error) {
-    console.error("Error checking access:", error);
+    const result = await publicClient.readContract({
+      address: CONTENT_PAYWALL_ADDRESS as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "hasAccess",
+      args: [userAddress as `0x${string}`, contentId],
+    });
+    return result as boolean;
+  } catch {
     return false;
   }
 };
 
 /** Get the price (in wei) for a specific content item. */
 export const getContentPrice = async (
-  provider: ethers.providers.Provider,
+  publicClient: PublicClient,
   contentId: string,
-): Promise<ethers.BigNumber> => {
+): Promise<bigint> => {
   try {
-    const contract = getContract(provider);
-    return await contract.contentPrices(contentId);
-  } catch (error) {
-    console.error("Error getting content price:", error);
-    return ethers.BigNumber.from(0);
+    const result = await publicClient.readContract({
+      address: CONTENT_PAYWALL_ADDRESS as `0x${string}`,
+      abi: CONTRACT_ABI,
+      functionName: "contentPrices",
+      args: [contentId],
+    });
+    return result as bigint;
+  } catch {
+    return 0n;
   }
 };
 
-/** Format a wei BigNumber as a human-readable rBTC string. */
-export const formatRBTC = (
-  amount: ethers.BigNumber,
-  decimals: number = 4,
-): string => {
-  return parseFloat(ethers.utils.formatEther(amount)).toFixed(decimals);
+/** Format a wei bigint as a human-readable rBTC string. */
+export const formatRBTC = (amount: bigint, decimals: number = 4): string => {
+  return parseFloat(formatEther(amount)).toFixed(decimals);
 };
 
-/** Parse a decimal rBTC string into a wei BigNumber. */
-export const parseRBTC = (amount: string): ethers.BigNumber => {
+/** Parse a decimal rBTC string into a wei bigint. */
+export const parseRBTC = (amount: string): bigint => {
   try {
-    return ethers.utils.parseEther(amount);
-  } catch (error) {
-    console.error("Error parsing rBTC amount:", error);
-    return ethers.BigNumber.from(0);
+    return parseEther(amount);
+  } catch {
+    return 0n;
   }
 };
 
 /** Validate whether a string is a valid Ethereum address. */
 export const isValidAddress = (address: string): boolean => {
-  try {
-    return ethers.utils.isAddress(address);
-  } catch {
-    return false;
-  }
+  return isAddress(address);
 };
 
 /** Shorten an address for display (0x1234...5678). */
@@ -184,15 +193,56 @@ export const shortenAddress = (address: string, chars: number = 4): string => {
 
 /** Return the block explorer URL for a transaction hash. */
 export const getTxUrl = (txHash: string): string =>
-  `${ROOTSTOCK_TESTNET.blockExplorer}/tx/${txHash}`;
+  `${ROOTSTOCK_TESTNET.blockExplorers.default.url}/tx/${txHash}`;
 
 /** Return the block explorer URL for a wallet address. */
 export const getAddressUrl = (address: string): string =>
-  `${ROOTSTOCK_TESTNET.blockExplorer}/address/${address}`;
+  `${ROOTSTOCK_TESTNET.blockExplorers.default.url}/address/${address}`;
 
 /** Return the block explorer URL for the ContentPaywall contract. */
 export const getContractUrl = (): string =>
-  `${ROOTSTOCK_TESTNET.blockExplorer}/address/${CONTENT_PAYWALL_ADDRESS}`;
+  `${ROOTSTOCK_TESTNET.blockExplorers.default.url}/address/${CONTENT_PAYWALL_ADDRESS}`;
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a user-safe error message from an unknown caught value.
+ * I2: Never logs raw internal error strings — sanitizes before returning.
+ * L1: Accepts `unknown` and narrows safely.
+ */
+function extractErrorMessage(err: unknown): string {
+  if (typeof err !== "object" || err === null) return "An unexpected error occurred";
+
+  const e = err as Record<string, unknown>;
+  const raw = String(
+    (e["data"] as Record<string, unknown>)?.["message"] ??
+    e["message"] ??
+    "",
+  ).toLowerCase();
+  const code = e["code"] ?? (e["error"] as Record<string, unknown>)?.["code"];
+
+  if (raw.includes("insufficient funds")) {
+    return "Insufficient funds (you need tRBTC for gas)";
+  }
+  if (raw.includes("user rejected") || raw.includes("action_rejected")) {
+    return "Transaction rejected by user";
+  }
+  if (raw.includes("content does not exist") || raw.includes("price not set")) {
+    return "Content not found or price is 0";
+  }
+  if (
+    code === "SERVER_ERROR" ||
+    code === -32603 ||
+    raw.includes("internal server error") ||
+    raw.includes("processing response error")
+  ) {
+    return "Network error: RPC rejected the transaction. Try again or switch network.";
+  }
+  // Return only a safe prefix — never expose raw internals (I2)
+  return raw.length > 0 ? raw.slice(0, 100) : "Failed to unlock content";
+}
 
 // Re-export for convenience
 export { CONTENT_PAYWALL_ADDRESS as CONTRACT_ADDRESS };

@@ -12,13 +12,9 @@ export default function App() {
 
         <main className="flex-grow">
           <Routes>
-            {/* Original starter-kit routes */}
             <Route path="/" element={<Home />} />
             <Route path="/aa" element={<Etherspot />} />
             <Route path="/wagmi" element={<Wagmi />} />
-
-            {/* SocialFi Paywall dashboard — added as a new route,
-                preserving the original starter-kit structure */}
             <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </main>
